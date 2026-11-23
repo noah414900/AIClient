@@ -1,4 +1,7 @@
 import os
+import json
+import urllib.request
+import urllib.error
 from flask import Flask, request, jsonify, render_template_string
 from openai import OpenAI
 
@@ -12,6 +15,7 @@ SYSTEM_PROMPT = (
 
 LITEROUTER_KEY = os.environ.get("LITEROUTER_API_KEY", "176fd1a2ef398f75be07e304683eef62ddb1fbc4ce6263259c6c09a9521ed36a")
 LITEROUTER_URL = os.environ.get("LITEROUTER_BASE_URL", "https://api.literouter.com/v1")
+
 literouter_client = OpenAI(
     base_url=LITEROUTER_URL,
     api_key=LITEROUTER_KEY,
@@ -20,6 +24,45 @@ literouter_client = OpenAI(
         "X-Title": "Noah AI Chatbot"
     }
 )
+
+def call_gemini_native(prompt, api_key):
+    """Calls Google's native Gemini API directly without OpenAI bridge issues."""
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+    payload = {
+        "system_instruction": {
+            "parts": [{"text": SYSTEM_PROMPT}]
+        },
+        "contents": [
+            {
+                "role": "user",
+                "parts": [{"text": prompt}]
+            }
+        ],
+        "generationConfig": {
+            "temperature": 0.6
+        }
+    }
+    
+    req = urllib.request.Request(
+        url,
+        data=json.dumps(payload).encode("utf-8"),
+        headers={"Content-Type": "application/json"}
+    )
+    
+    try:
+        with urllib.request.urlopen(req, timeout=30) as response:
+            res = json.loads(response.read().decode("utf-8"))
+            return res["candidates"][0]["content"]["parts"][0]["text"]
+    except urllib.error.HTTPError as e:
+        error_body = e.read().decode("utf-8")
+        try:
+            err_json = json.loads(error_body)
+            msg = err_json.get("error", {}).get("message", error_body)
+            return f"Google API Error ({e.code}): {msg}"
+        except Exception:
+            return f"Google HTTP Error ({e.code}): {error_body}"
+    except Exception as e:
+        return f"Gemini Connection Error: {str(e)}"
 
 HTML_PAGE = r"""
 <!DOCTYPE html>
@@ -113,9 +156,10 @@ HTML_PAGE = r"""
                     <option value="deepseek-v4-flash:free">DeepSeek V4 Flash (Free)</option>
                     <option value="minimax-m2.5:free">MiniMax M2.5 (Free)</option>
                     <option value="qwen3-coder-30b-a3b-instruct:free">Qwen3 Coder 30B (Low-Level C++)</option>
+                    <option value="google/gemini-2.0-flash-exp:free">Gemini 2.0 Flash (via LiteRouter)</option>
                 </optgroup>
-                <optgroup label="Google AI Studio (Official Free)">
-                    <option value="gemini-2.0-flash">Gemini 2.0 Flash (Fast Reasoning)</option>
+                <optgroup label="Google AI Studio (Official Direct)">
+                    <option value="gemini-direct">Gemini 2.0 Flash (Direct Google Key)</option>
                 </optgroup>
             </select>
         </div>
@@ -240,7 +284,7 @@ HTML_PAGE = r"""
             container.appendChild(userWrapper); scrollArea.scrollTop = scrollArea.scrollHeight;
 
             let botWrapper = document.createElement("div"); botWrapper.className = "msg-wrapper bot";
-            let shortModel = model.replace("claude-", "Claude ").replace(":free", "");
+            let shortModel = model.replace("claude-", "Claude ").replace(":free", "").replace("google/", "");
             botWrapper.innerHTML = `<div class="msg-sender">${escapeHtml(shortModel)}</div><div class="msg bot">Thinking...</div>`;
             container.appendChild(botWrapper); scrollArea.scrollTop = scrollArea.scrollHeight;
 
@@ -304,26 +348,14 @@ def chat():
     chosen_model = data.get("model", "llama-3.3-70b-instruct-turbo:free")
 
     try:
-        if chosen_model.startswith("gemini"):
+        if chosen_model == "gemini-direct":
             gemini_key = os.environ.get("GEMINI_API_KEY", "")
             if not gemini_key:
                 return jsonify({
-                    "reply": "⚠️ Gemini Key Missing: Please create a free key at aistudio.google.com and add it in Render -> Environment as 'GEMINI_API_KEY'."
+                    "reply": "⚠️ GEMINI_API_KEY is not set in Render Environment variables. Please add it in Render -> Environment."
                 })
-
-            gemini_client = OpenAI(
-                base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
-                api_key=gemini_key
-            )
-            response = gemini_client.chat.completions.create(
-                model=chosen_model,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.6
-            )
-            return jsonify({"reply": response.choices[0].message.content})
+            reply = call_gemini_native(prompt, gemini_key)
+            return jsonify({"reply": reply})
         else:
             response = literouter_client.chat.completions.create(
                 model=chosen_model,
