@@ -110,10 +110,13 @@ HTML_PAGE = r"""
                     <option value="claude-haiku-4-5">Claude Haiku 4.5 (Fast Cloud)</option>
                 </optgroup>
                 <optgroup label="Google Gemini (Puter Cloud)">
-                    <option value="gemini-4-carbon">Gemini 4 Carbon (Top Code & Security)</option>
-                    <option value="gemini-4-hydrogen">Gemini 4 Hydrogen (Everyday Speed)</option>
-                    <option value="gemini-4-neon">Gemini 4 Neon (Deep Coding & Logic)</option>
-                    <option value="gemini-3.8-flash">Gemini 3.8 Flash (Ultra Fast)</option>
+                    <option value="gemini-3-pro-preview">Gemini 3 Pro Preview</option>
+                    <option value="gemini-2.5-flash-preview-09-2025">Gemini 2.5 Flash Preview (09-2025)</option>
+                    <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
+                    <option value="gemini-2.5-pro-preview">Gemini 2.5 Pro Preview</option>
+                    <option value="gemini-2.5-pro-preview-05-06">Gemini 2.5 Pro Preview (05-06)</option>
+                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
+                    <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
                 </optgroup>
                 <optgroup label="LiteRouter Cloud (Free Tier)">
                     <option value="llama-3.3-70b-instruct-turbo:free">Llama 3.3 70B Turbo (Free & Uncensored)</option>
@@ -251,7 +254,6 @@ HTML_PAGE = r"""
             let botMsg = botWrapper.querySelector(".msg.bot");
             let replyText = "";
 
-            // Puter handles both Claude and Gemini models directly
             if (model.startsWith("claude-") || model.startsWith("gemini-")) {
                 try {
                     if (!puter.auth.isSignedIn()) {
