@@ -27,7 +27,7 @@ literouter_client = OpenAI(
 
 def call_gemini_native(prompt, api_key):
     """Calls Google's native Gemini API directly without OpenAI bridge issues."""
-    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key={api_key}"
+    url = f"https://generativelanguage.googleapis.com/v1beta/models/gemini-3.8-flash:generateContent?key={api_key}"
     payload = {
         "system_instruction": {
             "parts": [{"text": SYSTEM_PROMPT}]
@@ -156,10 +156,10 @@ HTML_PAGE = r"""
                     <option value="deepseek-v4-flash:free">DeepSeek V4 Flash (Free)</option>
                     <option value="minimax-m2.5:free">MiniMax M2.5 (Free)</option>
                     <option value="qwen3-coder-30b-a3b-instruct:free">Qwen3 Coder 30B (Low-Level C++)</option>
-                    <option value="google/gemini-2.0-flash-exp:free">Gemini 2.0 Flash (via LiteRouter)</option>
+                    <option value="google/gemini-3.8-flash-exp:free">Gemini 3.8 Flash (via LiteRouter)</option>
                 </optgroup>
                 <optgroup label="Google AI Studio (Official Direct)">
-                    <option value="gemini-direct">Gemini 2.0 Flash (Direct Google Key)</option>
+                    <option value="gemini-direct">Gemini 3.8 Flash (Direct Google Key)</option>
                 </optgroup>
             </select>
         </div>
