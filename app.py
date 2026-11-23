@@ -1,21 +1,7 @@
 import os
-from flask import Flask, request, jsonify, render_template_string
-from openai import OpenAI
+from flask import Flask, render_template_string
 
 app = Flask(__name__)
-
-# Backend API Configuration (Groq or Google Gemini via environment variables)
-# Defaults to Groq for free cloud DeepSeek-R1 and Llama-3.3-70B
-AI_BASE_URL = os.environ.get("AI_BASE_URL", "https://api.groq.com/openai/v1")
-AI_API_KEY = os.environ.get("AI_API_KEY", "dummy_key")
-
-client = OpenAI(base_url=AI_BASE_URL, api_key=AI_API_KEY)
-
-SYSTEM_PROMPT = (
-    "You are an expert game security researcher, reverse engineer, and low-level C++ engineer. "
-    "You analyze memory layouts, IDA Pro disassembly, Direct3D/ImGui rendering, and game structures directly and technically. "
-    "Never give generic drawing tips, filler, or safety disclaimers."
-)
 
 HTML_PAGE = r"""
 <!DOCTYPE html>
@@ -136,7 +122,7 @@ HTML_PAGE = r"""
             gap: 10px; 
         }
 
-        select, .ctrl-btn { 
+        select { 
             background: var(--bg-card); 
             color: var(--text-main); 
             border: 1px solid var(--border); 
@@ -148,7 +134,7 @@ HTML_PAGE = r"""
             cursor: pointer;
             transition: all 0.2s;
         }
-        select:hover, .ctrl-btn:hover { background: var(--bg-card-hover); }
+        select:hover { background: var(--bg-card-hover); }
 
         #puterBtn { 
             background: var(--accent); 
@@ -379,13 +365,23 @@ HTML_PAGE = r"""
             <button id="puterBtn" onclick="handlePuterLogin()">🔑 Connect Puter</button>
 
             <select id="modelSelect">
-                <optgroup label="Cloud Free (Claude Puter)">
+                <optgroup label="Claude (Top Reasoning)">
                     <option value="claude-opus-4-5">Claude Opus 4.5 (Deep Reasoning)</option>
                     <option value="claude-haiku-4-5">Claude Haiku 4.5 (Fast Cloud)</option>
                 </optgroup>
-                <optgroup label="Cloud Backend (Ultra Fast)">
-                    <option value="deepseek-r1-distill-llama-70b">DeepSeek R1 70B (Logic & Code)</option>
-                    <option value="llama-3.3-70b-versatile">Llama 3.3 70B (High Intelligence)</option>
+                <optgroup label="Fast Cloud & C++ Coding">
+                    <option value="minimax-m2.1-highspeed">MiniMax M2.1 Highspeed</option>
+                    <option value="glm-4-turbo">GLM-4 Turbo (Zhipu AI)</option>
+                    <option value="codestral-latest">Codestral (Mistral C++ Coding)</option>
+                </optgroup>
+                <optgroup label="OpenAI Models">
+                    <option value="gpt-4o">GPT-4o (Flagship Code & Vision)</option>
+                    <option value="gpt-4o-mini">GPT-4o Mini (Ultra Fast)</option>
+                    <option value="o3-mini">o3-mini (Logic Reasoning)</option>
+                </optgroup>
+                <optgroup label="DeepSeek">
+                    <option value="deepseek-reasoner">DeepSeek R1 (Reasoner)</option>
+                    <option value="deepseek-chat">DeepSeek V3 (Chat)</option>
                 </optgroup>
             </select>
         </div>
@@ -526,7 +522,7 @@ HTML_PAGE = r"""
                 container.innerHTML = `
                     <div class="msg-wrapper bot">
                         <div class="msg-sender">SYSTEM</div>
-                        <div class="msg bot">System online. Connect Puter at the top right for Claude Opus / Haiku, or select any cloud model to chat instantly.</div>
+                        <div class="msg bot">System online. Connect Puter at the top right to start chatting.</div>
                     </div>`;
                 return;
             }
@@ -537,7 +533,7 @@ HTML_PAGE = r"""
 
                 let sender = document.createElement("div");
                 sender.className = "msg-sender";
-                sender.innerText = m.role === "user" ? "YOU" : (m.model || "ASSISTANT");
+                sender.innerText = m.role === "user" ? "YOU" : (m.model || "AI");
 
                 let bubble = document.createElement("div");
                 bubble.className = "msg " + (m.role === "user" ? "user" : "bot");
@@ -613,7 +609,7 @@ HTML_PAGE = r"""
 
             let botWrapper = document.createElement("div");
             botWrapper.className = "msg-wrapper bot";
-            let shortModel = model.split("/").pop().split(":")[0];
+            let shortModel = model.replace("claude-", "Claude ").replace("-latest", "").replace("-highspeed", "");
             botWrapper.innerHTML = `<div class="msg-sender">${escapeHtml(shortModel)}</div><div class="msg bot">Thinking...</div>`;
             container.appendChild(botWrapper);
             scrollArea.scrollTop = scrollArea.scrollHeight;
@@ -621,47 +617,31 @@ HTML_PAGE = r"""
             let botMsg = botWrapper.querySelector(".msg.bot");
             let replyText = "";
 
-            if (model.startsWith("claude-")) {
-                try {
-                    if (!puter.auth.isSignedIn()) {
-                        replyText = "⚠️ Please click '🔑 Connect Puter' at the top right to sign in first!";
-                        botMsg.innerText = replyText;
-                        active.messages.push({ role: "bot", text: replyText, model: shortModel });
-                        saveStorage();
-                        return;
-                    }
+            try {
+                if (!puter.auth.isSignedIn()) {
+                    replyText = "⚠️ Please click '🔑 Connect Puter' at the top right to sign in first!";
+                    botMsg.innerText = replyText;
+                    active.messages.push({ role: "bot", text: replyText, model: shortModel });
+                    saveStorage();
+                    return;
+                }
 
-                    let promptWithSys = SYSTEM_PROMPT + "\n\nUser Request:\n" + text;
-                    let resp = await puter.ai.chat(promptWithSys, { model: model });
-                    
-                    if (typeof resp === 'string') {
-                        replyText = resp;
-                    } else if (resp?.message?.content) {
-                        replyText = resp.message.content[0].text;
-                    } else if (resp?.text) {
-                        replyText = resp.text;
-                    } else {
-                        replyText = JSON.stringify(resp, null, 2);
-                    }
-                    botMsg.innerText = replyText;
-                } catch(err) {
-                    replyText = "Claude Error: " + (err.message || JSON.stringify(err));
-                    botMsg.innerText = replyText;
+                let promptWithSys = SYSTEM_PROMPT + "\n\nUser Request:\n" + text;
+                let resp = await puter.ai.chat(promptWithSys, { model: model });
+                
+                if (typeof resp === 'string') {
+                    replyText = resp;
+                } else if (resp?.message?.content) {
+                    replyText = resp.message.content[0].text;
+                } else if (resp?.text) {
+                    replyText = resp.text;
+                } else {
+                    replyText = JSON.stringify(resp, null, 2);
                 }
-            } else {
-                try {
-                    let res = await fetch("/chat", {
-                        method: "POST",
-                        headers: {"Content-Type": "application/json"},
-                        body: JSON.stringify({prompt: text, model: model})
-                    });
-                    let data = await res.json();
-                    replyText = data.reply;
-                    botMsg.innerText = replyText;
-                } catch(err) {
-                    replyText = "Error contacting server backend.";
-                    botMsg.innerText = replyText;
-                }
+                botMsg.innerText = replyText;
+            } catch(err) {
+                replyText = "Error: " + (err.message || JSON.stringify(err));
+                botMsg.innerText = replyText;
             }
 
             active.messages.push({ role: "bot", text: replyText, model: shortModel });
@@ -685,25 +665,6 @@ HTML_PAGE = r"""
 @app.route("/")
 def home():
     return render_template_string(HTML_PAGE)
-
-@app.route("/chat", methods=["POST"])
-def chat():
-    data = request.json or {}
-    prompt = data.get("prompt", "")
-    chosen_model = data.get("model", "deepseek-r1-distill-llama-70b")
-    
-    try:
-        response = client.chat.completions.create(
-            model=chosen_model,
-            messages=[
-                {"role": "system", "content": SYSTEM_PROMPT},
-                {"role": "user", "content": prompt}
-            ],
-            temperature=0.6
-        )
-        return jsonify({"reply": response.choices[0].message.content})
-    except Exception as e:
-        return jsonify({"reply": f"Backend Error: {str(e)}"})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
