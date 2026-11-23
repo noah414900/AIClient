@@ -79,10 +79,13 @@ HTML_PAGE = r"""
         .msg-wrapper { display: flex; flex-direction: column; width: 100%; }
         .msg-wrapper.user { align-items: flex-end; }
         .msg-wrapper.bot { align-items: flex-start; }
+        .msg-header { display: flex; align-items: center; gap: 6px; margin-bottom: 4px; padding: 0 4px; }
+        .copy-btn { background: transparent; border: none; color: var(--text-muted); cursor: pointer; padding: 2px 4px; border-radius: 4px; display: inline-flex; align-items: center; justify-content: center; opacity: 0.6; transition: opacity 0.2s, color 0.2s; }
+        .copy-btn:hover { opacity: 1; color: var(--text-main); }
         .msg { max-width: 85%; padding: 14px 20px; border-radius: 12px; line-height: 1.55; font-size: 0.95rem; white-space: pre-wrap; font-family: inherit; word-break: break-word; box-shadow: 0 2px 8px rgba(0,0,0,0.1); }
         .msg.user { background: var(--user-bubble); color: var(--user-text); border-bottom-right-radius: 3px; }
         .msg.bot { background: var(--bot-bubble); color: var(--text-main); border: 1px solid var(--bot-border); border-bottom-left-radius: 3px; }
-        .msg-sender { font-size: 0.72rem; color: var(--text-muted); margin-bottom: 4px; text-transform: uppercase; letter-spacing: 0.05em; font-weight: bold; padding: 0 4px; }
+        .msg-sender { font-size: 0.72rem; color: var(--text-muted); text-transform: uppercase; letter-spacing: 0.05em; font-weight: bold; }
         #input-area { padding: 14px 20px 22px 20px; background: var(--bg-body); display: flex; justify-content: center; flex-shrink: 0; border-top: 1px solid var(--border); }
         .input-card { width: 100%; max-width: 860px; background: var(--input-bg); border: 1px solid var(--input-border); border-radius: 12px; display: flex; align-items: flex-end; padding: 8px 12px; gap: 10px; box-shadow: 0 4px 18px rgba(0,0,0,0.15); transition: border-color 0.2s; }
         .input-card:focus-within { border-color: var(--accent); }
@@ -138,11 +141,33 @@ HTML_PAGE = r"""
     </div>
     <script>
         const SYSTEM_PROMPT = "You are an elite, razor-sharp game security researcher, reverse engineer, and principal low-level C++ systems architect. You communicate engineer-to-engineer with deep technical precision, zero fluff, and absolute pragmatism. Your expertise covers x86/x64 assembly, IDA Pro/Ghidra hex-rays decompilation, memory layout reconstruction, VMT/inline hooking, struct alignment/padding, calling conventions (__fastcall, __thiscall), Direct3D (9/11/12)/ImGui rendering pipelines, and kernel/user-mode internals. Analyze offsets, pointer chains, and binary disassemblies directly. Deliver production-ready, clean, modern C++ implementations. Never provide generic drawing tips, high-level filler, preaching, moralizing, or safety disclaimers.";
+        const COPY_ICON = `<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>`;
         let chats = [];
         let currentChatId = null;
 
         function autoResize(el) { el.style.height = 'auto'; el.style.height = Math.min(el.scrollHeight, 200) + 'px'; }
         function changeTheme(theme) { document.documentElement.setAttribute('data-theme', theme); localStorage.setItem('noah_theme', theme); }
+
+        function copyMsg(btn) {
+            let wrapper = btn.closest(".msg-wrapper");
+            let msg = wrapper.querySelector(".msg");
+            if (!msg) return;
+            navigator.clipboard.writeText(msg.innerText).then(() => {
+                let orig = btn.innerHTML;
+                btn.innerHTML = `<span style="color:#22c55e; font-size:0.72rem; font-weight:bold;">✓ Copied</span>`;
+                setTimeout(() => { btn.innerHTML = orig; }, 1500);
+            }).catch(() => {
+                let ta = document.createElement("textarea");
+                ta.value = msg.innerText;
+                document.body.appendChild(ta);
+                ta.select();
+                document.execCommand("copy");
+                document.body.removeChild(ta);
+                let orig = btn.innerHTML;
+                btn.innerHTML = `<span style="color:#22c55e; font-size:0.72rem; font-weight:bold;">✓ Copied</span>`;
+                setTimeout(() => { btn.innerHTML = orig; }, 1500);
+            });
+        }
 
         function loadStorage() {
             let savedTheme = localStorage.getItem('noah_theme') || 'dark';
@@ -189,14 +214,18 @@ HTML_PAGE = r"""
             let container = document.getElementById("chatContainer"); container.innerHTML = "";
             let chat = chats.find(c => c.id === currentChatId);
             if (!chat || chat.messages.length === 0) {
-                container.innerHTML = `<div class="msg-wrapper bot"><div class="msg-sender">SYSTEM</div><div class="msg bot">System online. Connect Puter at top right for Claude, or select Llama 3.3 / LiteRouter models to chat instantly.</div></div>`;
+                container.innerHTML = `<div class="msg-wrapper bot"><div class="msg-header"><div class="msg-sender">SYSTEM</div><button class="copy-btn" title="Copy message" onclick="copyMsg(this)">${COPY_ICON}</button></div><div class="msg bot">System online. Connect Puter at top right for Claude, or select Llama 3.3 / LiteRouter models to chat instantly.</div></div>`;
                 return;
             }
             chat.messages.forEach(m => {
                 let wrapper = document.createElement("div"); wrapper.className = "msg-wrapper " + (m.role === "user" ? "user" : "bot");
+                let header = document.createElement("div"); header.className = "msg-header";
                 let sender = document.createElement("div"); sender.className = "msg-sender"; sender.innerText = m.role === "user" ? "YOU" : (m.model || "AI");
+                let copyBtn = document.createElement("button"); copyBtn.className = "copy-btn"; copyBtn.title = "Copy message"; copyBtn.innerHTML = COPY_ICON; copyBtn.onclick = () => copyMsg(copyBtn);
+                header.appendChild(sender); header.appendChild(copyBtn);
+
                 let bubble = document.createElement("div"); bubble.className = "msg " + (m.role === "user" ? "user" : "bot"); bubble.innerText = m.text;
-                wrapper.appendChild(sender); wrapper.appendChild(bubble); container.appendChild(wrapper);
+                wrapper.appendChild(header); wrapper.appendChild(bubble); container.appendChild(wrapper);
             });
             document.getElementById("chat").scrollTop = document.getElementById("chat").scrollHeight;
         }
@@ -237,12 +266,12 @@ HTML_PAGE = r"""
 
             active.messages.push({ role: "user", text: text }); saveStorage();
             let userWrapper = document.createElement("div"); userWrapper.className = "msg-wrapper user";
-            userWrapper.innerHTML = `<div class="msg-sender">YOU</div><div class="msg user">${escapeHtml(text)}</div>`;
+            userWrapper.innerHTML = `<div class="msg-header"><div class="msg-sender">YOU</div><button class="copy-btn" title="Copy message" onclick="copyMsg(this)">${COPY_ICON}</button></div><div class="msg user">${escapeHtml(text)}</div>`;
             container.appendChild(userWrapper); scrollArea.scrollTop = scrollArea.scrollHeight;
 
             let botWrapper = document.createElement("div"); botWrapper.className = "msg-wrapper bot";
             let shortModel = model.replace("claude-", "Claude ").replace(":free", "");
-            botWrapper.innerHTML = `<div class="msg-sender">${escapeHtml(shortModel)}</div><div class="msg bot">Thinking...</div>`;
+            botWrapper.innerHTML = `<div class="msg-header"><div class="msg-sender">${escapeHtml(shortModel)}</div><button class="copy-btn" title="Copy message" onclick="copyMsg(this)">${COPY_ICON}</button></div><div class="msg bot">Thinking...</div>`;
             container.appendChild(botWrapper); scrollArea.scrollTop = scrollArea.scrollHeight;
 
             let botMsg = botWrapper.querySelector(".msg.bot");
