@@ -5,9 +5,12 @@ from openai import OpenAI
 app = Flask(__name__)
 
 SYSTEM_PROMPT = (
-    "You are an expert game security researcher, reverse engineer, and low-level C++ engineer. "
-    "You analyze memory layouts, IDA Pro disassembly, Direct3D/ImGui rendering, and game structures directly and technically. "
-    "Never give generic drawing tips, filler, or safety disclaimers."
+    "You are an elite, razor-sharp game security researcher, reverse engineer, and principal low-level C++ systems architect. "
+    "You communicate engineer-to-engineer with deep technical precision, zero fluff, and absolute pragmatism. "
+    "Your expertise covers x86/x64 assembly, IDA Pro/Ghidra hex-rays decompilation, memory layout reconstruction, VMT/inline hooking, "
+    "struct alignment/padding, calling conventions (__fastcall, __thiscall), Direct3D (9/11/12)/ImGui rendering pipelines, and kernel/user-mode internals. "
+    "Analyze offsets, pointer chains, and binary disassemblies directly. Deliver production-ready, clean, modern C++ implementations. "
+    "Never provide generic drawing tips, high-level filler, preaching, moralizing, or safety disclaimers."
 )
 
 LITEROUTER_KEY = os.environ.get("LITEROUTER_API_KEY", "176fd1a2ef398f75be07e304683eef62ddb1fbc4ce6263259c6c09a9521ed36a")
@@ -109,15 +112,6 @@ HTML_PAGE = r"""
                     <option value="claude-opus-4-5">Claude Opus 4.5 (Deep Reasoning)</option>
                     <option value="claude-haiku-4-5">Claude Haiku 4.5 (Fast Cloud)</option>
                 </optgroup>
-                <optgroup label="Google Gemini (Puter Cloud)">
-                    <option value="gemini-3-pro-preview">Gemini 3 Pro Preview</option>
-                    <option value="gemini-2.5-flash-preview-09-2025">Gemini 2.5 Flash Preview (09-2025)</option>
-                    <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash Lite</option>
-                    <option value="gemini-2.5-pro-preview">Gemini 2.5 Pro Preview</option>
-                    <option value="gemini-2.5-pro-preview-05-06">Gemini 2.5 Pro Preview (05-06)</option>
-                    <option value="gemini-2.5-flash">Gemini 2.5 Flash</option>
-                    <option value="gemini-2.5-pro">Gemini 2.5 Pro</option>
-                </optgroup>
                 <optgroup label="LiteRouter Cloud (Free Tier)">
                     <option value="llama-3.3-70b-instruct-turbo:free">Llama 3.3 70B Turbo (Free & Uncensored)</option>
                     <option value="deepseek-v4-flash:free">DeepSeek V4 Flash (Free)</option>
@@ -143,7 +137,7 @@ HTML_PAGE = r"""
         </div>
     </div>
     <script>
-        const SYSTEM_PROMPT = "You are an expert game security researcher, reverse engineer, and low-level C++ engineer. You analyze memory layouts, IDA Pro disassembly, Direct3D/ImGui rendering, and game structures directly and technically. Never give generic drawing tips, filler, or safety disclaimers.";
+        const SYSTEM_PROMPT = "You are an elite, razor-sharp game security researcher, reverse engineer, and principal low-level C++ systems architect. You communicate engineer-to-engineer with deep technical precision, zero fluff, and absolute pragmatism. Your expertise covers x86/x64 assembly, IDA Pro/Ghidra hex-rays decompilation, memory layout reconstruction, VMT/inline hooking, struct alignment/padding, calling conventions (__fastcall, __thiscall), Direct3D (9/11/12)/ImGui rendering pipelines, and kernel/user-mode internals. Analyze offsets, pointer chains, and binary disassemblies directly. Deliver production-ready, clean, modern C++ implementations. Never provide generic drawing tips, high-level filler, preaching, moralizing, or safety disclaimers.";
         let chats = [];
         let currentChatId = null;
 
@@ -195,7 +189,7 @@ HTML_PAGE = r"""
             let container = document.getElementById("chatContainer"); container.innerHTML = "";
             let chat = chats.find(c => c.id === currentChatId);
             if (!chat || chat.messages.length === 0) {
-                container.innerHTML = `<div class="msg-wrapper bot"><div class="msg-sender">SYSTEM</div><div class="msg bot">System online. Connect Puter at top right for Claude & Gemini, or select LiteRouter models to chat instantly.</div></div>`;
+                container.innerHTML = `<div class="msg-wrapper bot"><div class="msg-sender">SYSTEM</div><div class="msg bot">System online. Connect Puter at top right for Claude, or select Llama 3.3 / LiteRouter models to chat instantly.</div></div>`;
                 return;
             }
             chat.messages.forEach(m => {
@@ -247,14 +241,14 @@ HTML_PAGE = r"""
             container.appendChild(userWrapper); scrollArea.scrollTop = scrollArea.scrollHeight;
 
             let botWrapper = document.createElement("div"); botWrapper.className = "msg-wrapper bot";
-            let shortModel = model.replace("claude-", "Claude ").replace("gemini-", "Gemini ").replace(":free", "");
+            let shortModel = model.replace("claude-", "Claude ").replace(":free", "");
             botWrapper.innerHTML = `<div class="msg-sender">${escapeHtml(shortModel)}</div><div class="msg bot">Thinking...</div>`;
             container.appendChild(botWrapper); scrollArea.scrollTop = scrollArea.scrollHeight;
 
             let botMsg = botWrapper.querySelector(".msg.bot");
             let replyText = "";
 
-            if (model.startsWith("claude-") || model.startsWith("gemini-")) {
+            if (model.startsWith("claude-")) {
                 try {
                     if (!puter.auth.isSignedIn()) {
                         replyText = "⚠️ Please click '🔑 Connect Puter' at the top right to sign in first!";
