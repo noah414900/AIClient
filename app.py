@@ -1,7 +1,34 @@
 import os
-from flask import Flask, render_template_string
+from flask import Flask, request, jsonify, render_template_string
+from openai import OpenAI
 
 app = Flask(__name__)
+
+# System Prompt (Strictly C++ Game Internals & Reverse Engineering)
+SYSTEM_PROMPT = (
+    "You are an expert game security researcher, reverse engineer, and low-level C++ engineer. "
+    "You analyze memory layouts, IDA Pro disassembly, Direct3D/ImGui rendering, and game structures directly and technically. "
+    "Never give generic drawing tips, filler, or safety disclaimers."
+)
+
+# 1. Google AI Studio (Official Gemini 2.0 Flash)
+GEMINI_KEY = os.environ.get("GEMINI_API_KEY", "AIzaSyC_TXsY6x_HJELSYkLNpwAgLoZo8iqJH0s")
+gemini_client = OpenAI(
+    base_url="https://generativelanguage.googleapis.com/v1beta/openai/",
+    api_key=GEMINI_KEY
+)
+
+# 2. LiteRouter Cloud Backend
+LITEROUTER_KEY = os.environ.get("LITEROUTER_API_KEY", "176fd1a2ef398f75be07e304683eef62ddb1fbc4ce6263259c6c09a9521ed36a")
+LITEROUTER_URL = os.environ.get("LITEROUTER_BASE_URL", "https://api.literouter.com/v1")
+literouter_client = OpenAI(
+    base_url=LITEROUTER_URL,
+    api_key=LITEROUTER_KEY,
+    default_headers={
+        "HTTP-Referer": "https://noahthegoatai.devs.surf",
+        "X-Title": "Noah AI Chatbot"
+    }
+)
 
 HTML_PAGE = r"""
 <!DOCTYPE html>
@@ -365,23 +392,17 @@ HTML_PAGE = r"""
             <button id="puterBtn" onclick="handlePuterLogin()">🔑 Connect Puter</button>
 
             <select id="modelSelect">
-                <optgroup label="Claude (Top Reasoning)">
+                <optgroup label="Anthropic Claude (Puter Cloud)">
                     <option value="claude-opus-4-5">Claude Opus 4.5 (Deep Reasoning)</option>
                     <option value="claude-haiku-4-5">Claude Haiku 4.5 (Fast Cloud)</option>
                 </optgroup>
-                <optgroup label="Fast Cloud & C++ Coding">
-                    <option value="minimax-m2.1-highspeed">MiniMax M2.1 Highspeed</option>
-                    <option value="glm-4-turbo">GLM-4 Turbo (Zhipu AI)</option>
-                    <option value="codestral-latest">Codestral (Mistral C++ Coding)</option>
+                <optgroup label="Google AI Studio (Official Free)">
+                    <option value="gemini-2.0-flash">Gemini 2.0 Flash (Fast Reasoning)</option>
                 </optgroup>
-                <optgroup label="OpenAI Models">
-                    <option value="gpt-4o">GPT-4o (Flagship Code & Vision)</option>
-                    <option value="gpt-4o-mini">GPT-4o Mini (Ultra Fast)</option>
-                    <option value="o3-mini">o3-mini (Logic Reasoning)</option>
-                </optgroup>
-                <optgroup label="DeepSeek">
-                    <option value="deepseek-reasoner">DeepSeek R1 (Reasoner)</option>
-                    <option value="deepseek-chat">DeepSeek V3 (Chat)</option>
+                <optgroup label="LiteRouter Cloud (Free Tier)">
+                    <option value="deepseek-v4-flash:free">DeepSeek V4 Flash (Free)</option>
+                    <option value="minimax-m2.5:free">MiniMax M2.5 (Free)</option>
+                    <option value="qwen3-coder-30b-a3b-instruct:free">Qwen3 Coder 30B (Low-Level C++)</option>
                 </optgroup>
             </select>
         </div>
@@ -522,7 +543,7 @@ HTML_PAGE = r"""
                 container.innerHTML = `
                     <div class="msg-wrapper bot">
                         <div class="msg-sender">SYSTEM</div>
-                        <div class="msg bot">System online. Connect Puter at the top right to start chatting.</div>
+                        <div class="msg bot">System online. Use Claude via Puter at top right, or select Gemini / LiteRouter models to chat instantly.</div>
                     </div>`;
                 return;
             }
@@ -609,7 +630,7 @@ HTML_PAGE = r"""
 
             let botWrapper = document.createElement("div");
             botWrapper.className = "msg-wrapper bot";
-            let shortModel = model.replace("claude-", "Claude ").replace("-latest", "").replace("-highspeed", "");
+            let shortModel = model.replace("claude-", "Claude ").replace(":free", "");
             botWrapper.innerHTML = `<div class="msg-sender">${escapeHtml(shortModel)}</div><div class="msg bot">Thinking...</div>`;
             container.appendChild(botWrapper);
             scrollArea.scrollTop = scrollArea.scrollHeight;
@@ -617,31 +638,50 @@ HTML_PAGE = r"""
             let botMsg = botWrapper.querySelector(".msg.bot");
             let replyText = "";
 
-            try {
-                if (!puter.auth.isSignedIn()) {
-                    replyText = "⚠️ Please click '🔑 Connect Puter' at the top right to sign in first!";
-                    botMsg.innerText = replyText;
-                    active.messages.push({ role: "bot", text: replyText, model: shortModel });
-                    saveStorage();
-                    return;
-                }
+            // ROUTE 1: PUTER CLAUDE (Browser-direct)
+            if (model.startsWith("claude-")) {
+                try {
+                    if (!puter.auth.isSignedIn()) {
+                        replyText = "⚠️ Please click '🔑 Connect Puter' at the top right to sign in first!";
+                        botMsg.innerText = replyText;
+                        active.messages.push({ role: "bot", text: replyText, model: shortModel });
+                        saveStorage();
+                        return;
+                    }
 
-                let promptWithSys = SYSTEM_PROMPT + "\n\nUser Request:\n" + text;
-                let resp = await puter.ai.chat(promptWithSys, { model: model });
-                
-                if (typeof resp === 'string') {
-                    replyText = resp;
-                } else if (resp?.message?.content) {
-                    replyText = resp.message.content[0].text;
-                } else if (resp?.text) {
-                    replyText = resp.text;
-                } else {
-                    replyText = JSON.stringify(resp, null, 2);
+                    let promptWithSys = SYSTEM_PROMPT + "\n\nUser Request:\n" + text;
+                    let resp = await puter.ai.chat(promptWithSys, { model: model });
+                    
+                    if (typeof resp === 'string') {
+                        replyText = resp;
+                    } else if (resp?.message?.content) {
+                        replyText = resp.message.content[0].text;
+                    } else if (resp?.text) {
+                        replyText = resp.text;
+                    } else {
+                        replyText = JSON.stringify(resp, null, 2);
+                    }
+                    botMsg.innerText = replyText;
+                } catch(err) {
+                    replyText = "Claude Error: " + (err.message || JSON.stringify(err));
+                    botMsg.innerText = replyText;
                 }
-                botMsg.innerText = replyText;
-            } catch(err) {
-                replyText = "Error: " + (err.message || JSON.stringify(err));
-                botMsg.innerText = replyText;
+            } 
+            // ROUTE 2: GOOGLE GEMINI & LITEROUTER (Server Backend)
+            else {
+                try {
+                    let res = await fetch("/chat", {
+                        method: "POST",
+                        headers: {"Content-Type": "application/json"},
+                        body: JSON.stringify({prompt: text, model: model})
+                    });
+                    let data = await res.json();
+                    replyText = data.reply;
+                    botMsg.innerText = replyText;
+                } catch(err) {
+                    replyText = "Error contacting server backend. Check Render deployment logs.";
+                    botMsg.innerText = replyText;
+                }
             }
 
             active.messages.push({ role: "bot", text: replyText, model: shortModel });
@@ -665,6 +705,38 @@ HTML_PAGE = r"""
 @app.route("/")
 def home():
     return render_template_string(HTML_PAGE)
+
+@app.route("/chat", methods=["POST"])
+def chat():
+    data = request.json or {}
+    prompt = data.get("prompt", "")
+    chosen_model = data.get("model", "gemini-2.0-flash")
+
+    try:
+        # Route to Google AI Studio if Gemini
+        if chosen_model.startswith("gemini"):
+            response = gemini_client.chat.completions.create(
+                model=chosen_model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.6
+            )
+        # Otherwise route to LiteRouter (DeepSeek, MiniMax, Qwen3 Coder)
+        else:
+            response = literouter_client.chat.completions.create(
+                model=chosen_model,
+                messages=[
+                    {"role": "system", "content": SYSTEM_PROMPT},
+                    {"role": "user", "content": prompt}
+                ],
+                temperature=0.6
+            )
+
+        return jsonify({"reply": response.choices[0].message.content})
+    except Exception as e:
+        return jsonify({"reply": f"API Error ({chosen_model}): {str(e)}"})
 
 if __name__ == "__main__":
     app.run(host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
