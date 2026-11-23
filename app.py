@@ -1,7 +1,4 @@
 import os
-import json
-import urllib.request
-import urllib.error
 from flask import Flask, request, jsonify, render_template_string
 from openai import OpenAI
 
@@ -24,57 +21,6 @@ literouter_client = OpenAI(
         "X-Title": "Noah AI Chatbot"
     }
 )
-
-def call_gemini_native(prompt, api_key):
-    """Calls Google's native Gemini API directly. Automatically bypasses 503 high demand."""
-    # Try the latest flash model first; if slammed with 503 traffic, fallback to rock-solid 1.5-flash
-    models_to_try = ["gemini-3.8-flash", "gemini-1.5-flash"]
-    last_error = ""
-
-    for model_name in models_to_try:
-        url = f"https://generativelanguage.googleapis.com/v1beta/models/{model_name}:generateContent?key={api_key}"
-        payload = {
-            "system_instruction": {
-                "parts": [{"text": SYSTEM_PROMPT}]
-            },
-            "contents": [
-                {
-                    "role": "user",
-                    "parts": [{"text": prompt}]
-                }
-            ],
-            "generationConfig": {
-                "temperature": 0.6
-            }
-        }
-        
-        req = urllib.request.Request(
-            url,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"}
-        )
-        
-        try:
-            with urllib.request.urlopen(req, timeout=30) as response:
-                res = json.loads(response.read().decode("utf-8"))
-                return res["candidates"][0]["content"]["parts"][0]["text"]
-        except urllib.error.HTTPError as e:
-            error_body = e.read().decode("utf-8")
-            try:
-                err_json = json.loads(error_body)
-                msg = err_json.get("error", {}).get("message", error_body)
-                last_error = f"Google API Error ({e.code}): {msg}"
-            except Exception:
-                last_error = f"Google HTTP Error ({e.code}): {error_body}"
-            
-            # If Google returns 503 (High Demand) or 404 (Not Found), try the backup model automatically
-            if e.code in [503, 404, 429]:
-                continue
-            return last_error
-        except Exception as e:
-            return f"Gemini Connection Error: {str(e)}"
-            
-    return last_error
 
 HTML_PAGE = r"""
 <!DOCTYPE html>
@@ -163,14 +109,17 @@ HTML_PAGE = r"""
                     <option value="claude-opus-4-5">Claude Opus 4.5 (Deep Reasoning)</option>
                     <option value="claude-haiku-4-5">Claude Haiku 4.5 (Fast Cloud)</option>
                 </optgroup>
+                <optgroup label="Google Gemini (Puter Cloud)">
+                    <option value="gemini-4-carbon">Gemini 4 Carbon (Top Code & Security)</option>
+                    <option value="gemini-4-hydrogen">Gemini 4 Hydrogen (Everyday Speed)</option>
+                    <option value="gemini-4-neon">Gemini 4 Neon (Deep Coding & Logic)</option>
+                    <option value="gemini-3.8-flash">Gemini 3.8 Flash (Ultra Fast)</option>
+                </optgroup>
                 <optgroup label="LiteRouter Cloud (Free Tier)">
                     <option value="llama-3.3-70b-instruct-turbo:free">Llama 3.3 70B Turbo (Free & Uncensored)</option>
                     <option value="deepseek-v4-flash:free">DeepSeek V4 Flash (Free)</option>
                     <option value="minimax-m2.5:free">MiniMax M2.5 (Free)</option>
                     <option value="qwen3-coder-30b-a3b-instruct:free">Qwen3 Coder 30B (Low-Level C++)</option>
-                </optgroup>
-                <optgroup label="Google AI Studio (Official Direct)">
-                    <option value="gemini-direct">Gemini Flash (Official Direct Key)</option>
                 </optgroup>
             </select>
         </div>
@@ -243,7 +192,7 @@ HTML_PAGE = r"""
             let container = document.getElementById("chatContainer"); container.innerHTML = "";
             let chat = chats.find(c => c.id === currentChatId);
             if (!chat || chat.messages.length === 0) {
-                container.innerHTML = `<div class="msg-wrapper bot"><div class="msg-sender">SYSTEM</div><div class="msg bot">System online. Use Claude via Puter at top right, or select Llama / LiteRouter / Gemini models to chat instantly.</div></div>`;
+                container.innerHTML = `<div class="msg-wrapper bot"><div class="msg-sender">SYSTEM</div><div class="msg bot">System online. Connect Puter at top right for Claude & Gemini, or select LiteRouter models to chat instantly.</div></div>`;
                 return;
             }
             chat.messages.forEach(m => {
@@ -295,14 +244,15 @@ HTML_PAGE = r"""
             container.appendChild(userWrapper); scrollArea.scrollTop = scrollArea.scrollHeight;
 
             let botWrapper = document.createElement("div"); botWrapper.className = "msg-wrapper bot";
-            let shortModel = model.replace("claude-", "Claude ").replace(":free", "").replace("gemini-direct", "Gemini Flash");
+            let shortModel = model.replace("claude-", "Claude ").replace("gemini-", "Gemini ").replace(":free", "");
             botWrapper.innerHTML = `<div class="msg-sender">${escapeHtml(shortModel)}</div><div class="msg bot">Thinking...</div>`;
             container.appendChild(botWrapper); scrollArea.scrollTop = scrollArea.scrollHeight;
 
             let botMsg = botWrapper.querySelector(".msg.bot");
             let replyText = "";
 
-            if (model.startsWith("claude-")) {
+            // Puter handles both Claude and Gemini models directly
+            if (model.startsWith("claude-") || model.startsWith("gemini-")) {
                 try {
                     if (!puter.auth.isSignedIn()) {
                         replyText = "⚠️ Please click '🔑 Connect Puter' at the top right to sign in first!";
@@ -318,7 +268,7 @@ HTML_PAGE = r"""
                     else replyText = JSON.stringify(resp, null, 2);
                     botMsg.innerText = replyText;
                 } catch(err) {
-                    replyText = "Claude Error: " + (err.message || JSON.stringify(err));
+                    replyText = `${shortModel} Error: ` + (err.message || JSON.stringify(err));
                     botMsg.innerText = replyText;
                 }
             } else {
@@ -359,24 +309,15 @@ def chat():
     chosen_model = data.get("model", "llama-3.3-70b-instruct-turbo:free")
 
     try:
-        if chosen_model == "gemini-direct":
-            gemini_key = os.environ.get("GEMINI_API_KEY", "")
-            if not gemini_key:
-                return jsonify({
-                    "reply": "⚠️ GEMINI_API_KEY is not set in Render Environment variables. Please add it in Render -> Environment."
-                })
-            reply = call_gemini_native(prompt, gemini_key)
-            return jsonify({"reply": reply})
-        else:
-            response = literouter_client.chat.completions.create(
-                model=chosen_model,
-                messages=[
-                    {"role": "system", "content": SYSTEM_PROMPT},
-                    {"role": "user", "content": prompt}
-                ],
-                temperature=0.6
-            )
-            return jsonify({"reply": response.choices[0].message.content})
+        response = literouter_client.chat.completions.create(
+            model=chosen_model,
+            messages=[
+                {"role": "system", "content": SYSTEM_PROMPT},
+                {"role": "user", "content": prompt}
+            ],
+            temperature=0.6
+        )
+        return jsonify({"reply": response.choices[0].message.content})
     except Exception as e:
         return jsonify({"reply": f"API Error ({chosen_model}): {str(e)}"})
 
