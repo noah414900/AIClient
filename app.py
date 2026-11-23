@@ -54,7 +54,8 @@ HTML_PAGE = r"""
         }
         body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif; background: var(--bg-body); color: var(--text-main); margin: 0; display: flex; flex-direction: column; height: 100vh; overflow: hidden; }
         #header { height: 58px; background: var(--bg-header); border-bottom: 1px solid var(--border); display: flex; justify-content: space-between; align-items: center; padding: 0 20px; position: relative; flex-shrink: 0; box-shadow: 0 2px 10px rgba(0,0,0,0.15); }
-        #header-title { position: absolute; left: 50%; transform: translateX(-50%); font-weight: 700; font-size: 1.15rem; letter-spacing: -0.01em; pointer-events: none; display: flex; align-items: center; gap: 8px; }
+        #header-title { position: absolute; left: 50%; transform: translateX(-50%); font-weight: 700; font-size: 1.15rem; letter-spacing: -0.01em; pointer-events: none; display: flex; align-items: center; gap: 10px; }
+        #header-logo { width: 28px; height: 28px; border-radius: 50%; object-fit: cover; border: 1px solid var(--border); box-shadow: 0 2px 8px rgba(0,0,0,0.3); }
         #sidebar-toggle-title { font-weight: 600; font-size: 0.9rem; color: var(--text-muted); display: flex; align-items: center; gap: 6px; }
         .header-controls { display: flex; align-items: center; gap: 10px; }
         select { background: var(--bg-card); color: var(--text-main); border: 1px solid var(--border); padding: 7px 12px; border-radius: 8px; outline: none; font-size: 0.85rem; font-weight: 500; cursor: pointer; transition: all 0.2s; }
@@ -102,7 +103,10 @@ HTML_PAGE = r"""
 <body>
     <div id="header">
         <div id="sidebar-toggle-title">💬 Sessions</div>
-        <div id="header-title">⚡ Noah's AI Chatbot Helper</div>
+        <div id="header-title">
+            <img id="header-logo" src="https://cdn.discordapp.com/icons/1492249334463594707/432a32c1551666e67a1d1a8d6ff6444f.webp?size=1024" alt="Icon">
+            <span>⚡ Noah's AI Chatbot Helper</span>
+        </div>
         <div class="header-controls">
             <select id="themeSelect" onchange="changeTheme(this.value)">
                 <option value="dark">🌙 Dark</option>
